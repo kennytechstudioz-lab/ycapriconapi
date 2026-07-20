@@ -5,5 +5,5 @@ export NVM_DIR="$HOME/.nvm"
 echo "Deploying Youngcap API..."
 npm install
 npm run build
-pm2 restart ycapricorn-api || pm2 start dist/index.js --name "ycapricorn-api"
+pm2 restart ycapricon-api || pm2 start dist/index.js --name "ycapricon-api"
 echo "Youngcap API deployed successfully!"
