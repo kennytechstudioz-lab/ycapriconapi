@@ -1,0 +1,156 @@
+import { Router } from "express";
+import {
+  registerUser,
+  loginUser,
+  getAllUsers,
+  updateUserByAdmin,
+  deleteUser,
+  bulkUpdateUsers,
+  getUserWallets,
+  getUserProfile,
+  updateUserProfile,
+  allocateUserDeposit,
+  fundUserWallet,
+  getUserTransactions,
+  updateUserWalletAddress,
+  changeUserPassword,
+  toggleUser2FA,
+  getAllTransactionsForAdmin,
+  deleteUserTransaction,
+  updateTransactionStatusByAdmin,
+  getActiveDeposits,
+  getAllActiveDepositsForAdmin,
+  deleteActiveDeposit,
+  getUserEarnings,
+  getAllEarningsForAdmin,
+  deleteEarning,
+  getUserReferrals,
+  getAllReferralsForAdmin,
+  adminBulkNotify,
+  adminBulkEmail,
+  adminCreateTransaction,
+  requestUserWithdrawal,
+  approveVerification,
+  rejectVerification,
+  forgotPassword,
+  verifyResetOtp,
+  resetPassword,
+  verifyTwoFactorOtp,
+  requestCapitalAccess,
+} from "../controllers/userController";
+
+const router = Router();
+
+
+// Route: GET /api/users/wallets (Retrieve current user's wallets)
+router.get("/wallets", getUserWallets);
+
+// Route: PUT /api/users/wallets/address (Update wallet payout address)
+router.put("/wallets/address", updateUserWalletAddress);
+
+// Route: PUT /api/users/password (Change user password)
+router.put("/password", changeUserPassword);
+
+// Route: PUT /api/users/2fa (Toggle 2FA)
+router.put("/2fa", toggleUser2FA);
+
+// Route: POST /api/users/deposit (Allocate or deposit clean energy capital)
+router.post("/deposit", allocateUserDeposit);
+
+// Route: POST /api/users/fund (Fund user wallet)
+router.post("/fund", fundUserWallet);
+
+// Route: POST /api/users/withdrawal (User requests a withdrawal)
+router.post("/withdrawal", requestUserWithdrawal);
+
+// Route: POST /api/users/capital-access (User requests capital access)
+router.post("/capital-access", requestCapitalAccess);
+
+// Route: GET /api/users/profile (Retrieve user's verification details & profilePicture)
+router.get("/profile", getUserProfile);
+
+// Route: GET /api/users/transactions/all (Retrieve all transactions in system for admin)
+router.get("/transactions/all", getAllTransactionsForAdmin);
+
+// Route: GET /api/users/transactions (Retrieve user's transactions)
+router.get("/transactions", getUserTransactions);
+
+// Route: DELETE /api/users/transactions/:id (Delete a transaction by ID)
+router.delete("/transactions/:id", deleteUserTransaction);
+
+// Route: PATCH /api/users/transactions/:id/status (Update transaction status by admin)
+router.patch("/transactions/:id/status", updateTransactionStatusByAdmin);
+
+// Route: GET /api/users/active-deposits (Retrieve user's active deposits)
+router.get("/active-deposits", getActiveDeposits);
+
+// Route: GET /api/users/active-deposits/all (Retrieve all active deposits system-wide for admin)
+router.get("/active-deposits/all", getAllActiveDepositsForAdmin);
+
+// Route: DELETE /api/users/active-deposits/:id (Delete an active deposit tranche by admin)
+router.delete("/active-deposits/:id", deleteActiveDeposit);
+
+// Route: GET /api/users/earnings (Retrieve current user's compounding payouts)
+router.get("/earnings", getUserEarnings);
+
+// Route: GET /api/users/earnings/all (Retrieve all platform-wide earnings for admin auditing)
+router.get("/earnings/all", getAllEarningsForAdmin);
+
+// Route: DELETE /api/users/earnings/:id (Delete earning document)
+router.delete("/earnings/:id", deleteEarning);
+
+// Route: PUT /api/users/profile (Update user's verification details & profilePicture)
+router.put("/profile", updateUserProfile);
+
+// Route: GET /api/users/referrals/all (Retrieve all referrals system-wide for admin)
+router.get("/referrals/all", getAllReferralsForAdmin);
+
+// Route: GET /api/users/referrals (Retrieve user referrals list)
+router.get("/referrals", getUserReferrals);
+
+// Route: POST /api/users/bulk-notify (Admin sends in-app notification to selected users)
+router.post("/bulk-notify", adminBulkNotify);
+
+// Route: POST /api/users/bulk-email (Admin sends templated email to selected users)
+router.post("/bulk-email", adminBulkEmail);
+
+// Route: POST /api/users/transactions/admin (Admin creates a transaction for a user)
+router.post("/transactions/admin", adminCreateTransaction);
+
+// Route: POST /api/users/verification/approve (Admin approves user KYC)
+router.post("/verification/approve", approveVerification);
+
+// Route: POST /api/users/verification/reject (Admin rejects user KYC with reason)
+router.post("/verification/reject", rejectVerification);
+
+// Route: POST /api/users/forgot-password (Step 1: send OTP to email)
+router.post("/forgot-password", forgotPassword);
+
+// Route: POST /api/users/forgot-password/verify-otp (Step 2: verify OTP)
+router.post("/forgot-password/verify-otp", verifyResetOtp);
+
+// Route: POST /api/users/forgot-password/reset (Step 3: set new password)
+router.post("/forgot-password/reset", resetPassword);
+
+// Route: POST /api/users/2fa/verify (Verify 2FA OTP after login)
+router.post("/2fa/verify", verifyTwoFactorOtp);
+
+// Route: POST /api/users/register
+router.post("/register", registerUser);
+
+// Route: POST /api/users/login
+router.post("/login", loginUser);
+
+// Route: GET /api/users (Retrieve all users)
+router.get("/", getAllUsers);
+
+// Route: PATCH /api/users/bulk (Bulk update selected users)
+router.patch("/bulk", bulkUpdateUsers);
+
+// Route: PATCH /api/users/:id (Update user role/status by admin)
+router.patch("/:id", updateUserByAdmin);
+
+// Route: DELETE /api/users/:id (Delete user account by admin)
+router.delete("/:id", deleteUser);
+
+export default router;
