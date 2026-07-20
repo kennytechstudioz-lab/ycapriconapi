@@ -28,7 +28,7 @@ const scheduler_1 = require("./utils/scheduler");
 // Load configuration variables
 dotenv_1.default.config();
 const app = (0, express_1.default)();
-const PORT = process.env.PORT || 5002;
+const PORT = process.env.PORT || 5009;
 // Set up server middlewares
 app.use((0, cors_1.default)());
 app.use(express_1.default.json({ limit: "10mb" }));

@@ -26,7 +26,7 @@ import { startActiveDepositScheduler } from "./utils/scheduler";
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 5002;
+const PORT = process.env.PORT || 5009;
 
 // Set up server middlewares
 app.use(cors());
@@ -62,7 +62,7 @@ connectDatabase();
 app.get("/api/health", (req, res) => {
   const dbState = mongoose.connection.readyState;
   let dbStatusStr = "unknown";
-  
+
   switch (dbState) {
     case 0:
       dbStatusStr = "disconnected";
@@ -104,7 +104,7 @@ server.listen(PORT, () => {
   console.log(` Environment: development`);
   console.log(` Health Gateway: http://localhost:${PORT}/api/health`);
   console.log(`========================================`);
-  
+
   // Start the Active Deposit scheduler after database and server are live
   startActiveDepositScheduler();
 
