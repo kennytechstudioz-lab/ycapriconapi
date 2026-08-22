@@ -40,13 +40,20 @@ async function updateSettings(req, res) {
             setting = new Setting_1.default();
         }
         // Apply values if defined in the payload parameters
-        setting.companyName = companyName !== undefined ? companyName.trim() : setting.companyName;
-        setting.domainName = domainName !== undefined ? domainName.trim() : setting.domainName;
-        setting.email = email !== undefined ? email.trim() : setting.email;
-        setting.phone = phone !== undefined ? phone.trim() : setting.phone;
-        setting.address = address !== undefined ? address.trim() : setting.address;
-        setting.description = description !== undefined ? description.trim() : setting.description;
-        setting.showCurrency = showCurrency !== undefined ? Boolean(showCurrency) : setting.showCurrency;
+        if (companyName !== undefined)
+            setting.companyName = String(companyName).trim();
+        if (domainName !== undefined)
+            setting.domainName = String(domainName).trim();
+        if (email !== undefined)
+            setting.email = String(email).trim();
+        if (phone !== undefined)
+            setting.phone = String(phone).trim();
+        if (address !== undefined)
+            setting.address = String(address).trim();
+        if (description !== undefined)
+            setting.description = String(description).trim();
+        if (showCurrency !== undefined)
+            setting.showCurrency = Boolean(showCurrency);
         if (registrationLink !== undefined)
             setting.registrationLink = String(registrationLink).trim();
         if (documents !== undefined)
