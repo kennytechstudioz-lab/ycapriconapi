@@ -17,6 +17,7 @@ const WalletSchema = new mongoose_1.Schema({
         type: String,
         required: true,
         trim: true,
+        uppercase: true,
     },
     currencyLogo: {
         type: String,
@@ -50,6 +51,16 @@ const WalletSchema = new mongoose_1.Schema({
     },
 }, {
     timestamps: true,
+});
+// Compound Unique Index — strictly enforce one wallet per currency per user
+WalletSchema.index({ username: 1, currencySymbol: 1 }, { unique: true });
+// Pre-validate hook to ensure username and currencySymbol are trimmed & formatted
+WalletSchema.pre("validate", function (next) {
+    if (this.username)
+        this.username = this.username.trim();
+    if (this.currencySymbol)
+        this.currencySymbol = this.currencySymbol.trim().toUpperCase();
+    next();
 });
 // Post-save hook — keep user.balance and user.totalBalance in sync with the sum of all wallet balances
 WalletSchema.post("save", async function (doc) {

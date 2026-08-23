@@ -101,23 +101,33 @@ export async function registerUser(req: Request, res: Response) {
     if (Array.isArray(wallets) && wallets.length > 0) {
       for (const w of wallets) {
         const walletAddress = w.walletAddress?.trim();
-        if (walletAddress) {
+        const symbol = w.currencySymbol?.trim().toUpperCase();
+        if (walletAddress && symbol) {
           const currency = await Currency.findOne({
-            symbol: w.currencySymbol?.trim().toUpperCase(),
+            symbol: symbol,
           });
           if (currency) {
-            await Wallet.create({
-              currencyId: currency._id,
-              currencyName: currency.name,
-              currencySymbol: currency.symbol,
-              currencyLogo: currency.image || "",
-              username: cleanUsername,
-              address: walletAddress,
-              balance: 0.0,
-              totalDeposit: 0.0,
-              totalWithdrawal: 0.0,
-              activeDeposit: 0.0,
-            });
+            await Wallet.findOneAndUpdate(
+              {
+                username: cleanUsername,
+                currencySymbol: symbol,
+              },
+              {
+                $set: {
+                  currencyId: currency._id,
+                  currencyName: currency.name,
+                  currencyLogo: currency.image || "",
+                  address: walletAddress,
+                },
+                $setOnInsert: {
+                  balance: 0.0,
+                  totalDeposit: 0.0,
+                  totalWithdrawal: 0.0,
+                  activeDeposit: 0.0,
+                },
+              },
+              { upsert: true, new: true, setDefaultsOnInsert: true }
+            );
           }
         }
       }
@@ -565,6 +575,7 @@ export async function bulkUpdateUsers(req: Request, res: Response) {
 
 // Controller: Retrieve all wallets associated with a specific investor username
 // Synchronizes system currencies on the fly, creating/updating user wallets as needed
+// Automatically deduplicates and merges redundant wallets for the same currency
 export async function getUserWallets(req: Request, res: Response) {
   try {
     const { username } = req.query;
@@ -574,62 +585,87 @@ export async function getUserWallets(req: Request, res: Response) {
       });
     }
 
-    const usernameVal = String(username);
+    const usernameVal = String(username).trim();
 
     // 1. Fetch all system currencies
     const currencies = await Currency.find({});
 
-    // 2. Fetch the user's existing wallets
-    const existingWallets = await Wallet.find({ username: { $regex: new RegExp("^" + usernameVal + "$", "i") } });
-
-    // Map existing wallets by currencyId for quick lookup
-    const walletMap = new Map();
-    existingWallets.forEach((w) => {
-      walletMap.set(w.currencyId.toString(), w);
+    // 2. Fetch the user's existing wallets (case-insensitive)
+    const existingWallets = await Wallet.find({
+      username: { $regex: new RegExp("^" + usernameVal + "$", "i") },
     });
 
     const updatedWallets = [];
 
-    // 3. Sync user wallets with system currencies
+    // 3. Process each system currency and deduplicate wallets per currency
     for (const currency of currencies) {
       const curIdStr = currency._id.toString();
-      const existingWallet = walletMap.get(curIdStr);
+      const curSymbol = (currency.symbol || "").trim().toUpperCase();
 
-      if (existingWallet) {
-        // Wallet exists - check if currency details (name, symbol, logo/image) changed
-        let needsUpdate = false;
-        const updates: any = {};
+      // Find all existing wallets that match either this currency's _id OR its currencySymbol
+      const matchingWallets = existingWallets.filter((w: any) => {
+        const matchId = w.currencyId && w.currencyId.toString() === curIdStr;
+        const matchSymbol = w.currencySymbol && (w.currencySymbol || "").trim().toUpperCase() === curSymbol;
+        return matchId || matchSymbol;
+      });
 
-        if (existingWallet.currencyName !== currency.name) {
-          updates.currencyName = currency.name;
-          needsUpdate = true;
-        }
-        if (existingWallet.currencySymbol !== currency.symbol) {
-          updates.currencySymbol = currency.symbol;
-          needsUpdate = true;
-        }
-        if (existingWallet.currencyLogo !== currency.image) {
-          updates.currencyLogo = currency.image;
-          needsUpdate = true;
+      if (matchingWallets.length > 0) {
+        // If there are multiple duplicate wallets, select the primary one (highest balance, or first with address)
+        const primaryWallet = matchingWallets.reduce((best: any, curr: any) => {
+          if ((curr.balance || 0) > (best.balance || 0)) return curr;
+          if (!best.address && curr.address) return curr;
+          return best;
+        }, matchingWallets[0]);
+
+        // Aggregate funds from all duplicates into the primary wallet
+        let totalMergedBalance = 0;
+        let totalMergedDeposit = 0;
+        let totalMergedWithdrawal = 0;
+        let totalMergedActiveDeposit = 0;
+        let bestAddress = primaryWallet.address || "";
+
+        const duplicateIdsToDelete: any[] = [];
+
+        for (const w of matchingWallets) {
+          totalMergedBalance += Number(w.balance) || 0;
+          totalMergedDeposit += Number(w.totalDeposit) || 0;
+          totalMergedWithdrawal += Number(w.totalWithdrawal) || 0;
+          totalMergedActiveDeposit += Number(w.activeDeposit) || 0;
+          if (!bestAddress && w.address) {
+            bestAddress = w.address;
+          }
+          if (w._id.toString() !== primaryWallet._id.toString()) {
+            duplicateIdsToDelete.push(w._id);
+          }
         }
 
-        if (needsUpdate) {
-          const updated = await Wallet.findByIdAndUpdate(
-            existingWallet._id,
-            { $set: updates },
-            { new: true }
-          );
-          updatedWallets.push(updated);
-        } else {
-          updatedWallets.push(existingWallet);
+        // Delete duplicate records if any
+        if (duplicateIdsToDelete.length > 0) {
+          await Wallet.deleteMany({ _id: { $in: duplicateIdsToDelete } });
+          console.log(`[Wallet Deduplication] Merged & deleted ${duplicateIdsToDelete.length} duplicate ${curSymbol} wallets for "${usernameVal}".`);
         }
+
+        // Update primary wallet with fresh currency meta and merged balances
+        primaryWallet.currencyId = currency._id;
+        primaryWallet.currencyName = currency.name;
+        primaryWallet.currencySymbol = currency.symbol;
+        primaryWallet.currencyLogo = currency.image || "";
+        primaryWallet.username = usernameVal;
+        primaryWallet.address = bestAddress;
+        primaryWallet.balance = totalMergedBalance;
+        primaryWallet.totalDeposit = totalMergedDeposit;
+        primaryWallet.totalWithdrawal = totalMergedWithdrawal;
+        primaryWallet.activeDeposit = totalMergedActiveDeposit;
+
+        await primaryWallet.save();
+        updatedWallets.push(primaryWallet);
       } else {
-        // Wallet does not exist - create a new wallet for this user
+        // Wallet does not exist - create a new single wallet for this user
         const newWallet = await Wallet.create({
           currencyId: currency._id,
           currencyName: currency.name,
           currencySymbol: currency.symbol,
-          currencyLogo: currency.image,
+          currencyLogo: currency.image || "",
           username: usernameVal,
           address: "",
           balance: 0.0,
@@ -1805,6 +1841,7 @@ export async function adminCreateTransaction(req: Request, res: Response) {
     const amountNum = Number(amount);
 
     const isBonus = txnType === "bonus";
+    const isFunding = txnType === "funding" || txnType === "credit";
     const isDeposit = txnType === "deposit";
     const isWithdrawal = txnType === "withdrawal";
     const isReduction = txnType === "reduction";
@@ -1862,6 +1899,25 @@ export async function adminCreateTransaction(req: Request, res: Response) {
       status: "completed",
     });
     await transaction.save();
+
+    if (isFunding) {
+      wallet.balance = (wallet.balance || 0) + amountNum;
+      wallet.totalDeposit = (wallet.totalDeposit || 0) + amountNum;
+      await wallet.save();
+
+      sendTemplatedNotification({
+        username: user.username,
+        templateName: "deposit_approval",
+        variables: {
+          username: user.username,
+          amount: amountNum.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+          currency: wallet.currencyName,
+        },
+        fallbackTitle: "Account Funded",
+        fallbackContent: `Hello ${user.username}, your ${wallet.currencyName} wallet has been credited with $${amountNum}.`,
+        notifyAdmin: false,
+      }).catch((err) => console.error("[Funding] Notification failed:", err));
+    }
 
     if (isBonus) {
       wallet.balance = (wallet.balance || 0) + amountNum;
