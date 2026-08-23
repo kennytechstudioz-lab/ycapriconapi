@@ -1,8 +1,10 @@
+import fs from "fs";
+import path from "path";
 import { Request, Response } from "express";
-import { uploadToS3, deleteFromS3 } from "../utils/s3Upload";
+import Setting from "../models/Setting";
 
 /**
- * Controller: Handles a single image file upload and stores it on AWS S3.
+ * Controller: Handles a single image/media file upload directly to the server filesystem.
  *
  * @param req Express Request object containing the multer-parsed file
  * @param res Express Response object
@@ -17,30 +19,49 @@ export async function uploadMedia(req: Request, res: Response) {
       });
     }
 
-    const { buffer, originalname, mimetype } = req.file;
+    const { buffer, originalname } = req.file;
 
-    // 2. Dispatch file stream buffer to AWS S3 bucket
-    const publicUrl = await uploadToS3(buffer, originalname, mimetype);
+    // 2. Save file to local uploads directory on the server
+    const uploadsDir = path.join(process.cwd(), "uploads");
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
 
-    // 3. Return secure S3 URL resource
+    const cleanFileName = originalname.replace(/\s+/g, "_");
+    const filename = `${Date.now()}-${cleanFileName}`;
+    const filePath = path.join(uploadsDir, filename);
+    fs.writeFileSync(filePath, buffer);
+
+    let hostUrl = "";
+    if (req.headers.host) {
+      const protocol = req.protocol === "https" || req.headers["x-forwarded-proto"] === "https" ? "https" : "http";
+      hostUrl = `${protocol}://${req.headers.host}`;
+    } else {
+      const setting = await Setting.findOne({});
+      const rawDomain = setting?.domainName || "capricornenergyholdings.com";
+      hostUrl = rawDomain.startsWith("http") ? rawDomain.replace(/\/+$/, "") : `https://${rawDomain.replace(/\/+$/, "")}`;
+    }
+
+    const localUrl = `${hostUrl}/uploads/${filename}`;
+
     return res.status(200).json({
       success: true,
-      url: publicUrl,
+      url: localUrl,
       fileName: originalname,
     });
   } catch (err: any) {
-    console.error("AWS S3 Upload Error: ", err);
+    console.error("Upload Error: ", err);
     return res.status(500).json({
       success: false,
-      error: err.message || "An unexpected error occurred while uploading to Amazon S3.",
+      error: err.message || "An unexpected error occurred while uploading file to the server.",
     });
   }
 }
 
 /**
- * Controller: Removes an image from AWS S3 bucket given its public URL link.
+ * Controller: Removes an image from server storage given its public URL link.
  *
- * @param req Express Request containing target S3 URL in body
+ * @param req Express Request containing target URL in body
  * @param res Express Response
  */
 export async function deleteMedia(req: Request, res: Response) {
@@ -53,18 +74,24 @@ export async function deleteMedia(req: Request, res: Response) {
       });
     }
 
-    // Trigger central S3 deletion
-    await deleteFromS3(url);
+    // Handle local uploads directory deletion
+    if (url.includes("/uploads/")) {
+      const filename = url.split("/uploads/")[1];
+      const filePath = path.join(process.cwd(), "uploads", filename);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    }
 
     return res.status(200).json({
       success: true,
-      message: "Media object deleted successfully from AWS S3 bucket.",
+      message: "Media file deleted successfully from the server.",
     });
   } catch (err: any) {
-    console.error("AWS S3 Deletion Error: ", err);
+    console.error("Deletion Error: ", err);
     return res.status(500).json({
       success: false,
-      error: err.message || "An unexpected error occurred while deleting from Amazon S3.",
+      error: err.message || "An unexpected error occurred while deleting media object from the server.",
     });
   }
 }

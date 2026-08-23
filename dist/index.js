@@ -25,6 +25,8 @@ const blogRoutes_1 = __importDefault(require("./routes/blogRoutes"));
 const termRoutes_1 = __importDefault(require("./routes/termRoutes"));
 const contactRoutes_1 = __importDefault(require("./routes/contactRoutes"));
 const scheduler_1 = require("./utils/scheduler");
+const path_1 = __importDefault(require("path"));
+const fs_1 = __importDefault(require("fs"));
 // Load configuration variables
 dotenv_1.default.config();
 const app = (0, express_1.default)();
@@ -32,6 +34,12 @@ const PORT = process.env.PORT || 5009;
 // Set up server middlewares
 app.use((0, cors_1.default)());
 app.use(express_1.default.json({ limit: "10mb" }));
+// Ensure uploads directory exists and is statically served
+const uploadsDir = path_1.default.join(process.cwd(), "uploads");
+if (!fs_1.default.existsSync(uploadsDir)) {
+    fs_1.default.mkdirSync(uploadsDir, { recursive: true });
+}
+app.use("/uploads", express_1.default.static(uploadsDir));
 // Premium request logger middleware (Registered first to capture all paths)
 app.use((req, res, next) => {
     const timestamp = new Date().toLocaleString();
