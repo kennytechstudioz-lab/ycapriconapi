@@ -6,6 +6,7 @@ interface EmailLayoutOptions {
   content: string;
   companyName?: string;
   companyEmail?: string;
+  domainUrl?: string;
   year?: number;
 }
 
@@ -18,6 +19,7 @@ export function buildEmailHtml(opts: EmailLayoutOptions): string {
     content,
     companyName = process.env.EMAIL_FROM_NAME || "Capricorn Energy",
     companyEmail = process.env.EMAIL_FROM_ADDRESS || "",
+    domainUrl,
     year = new Date().getFullYear(),
   } = opts;
 
@@ -29,7 +31,7 @@ export function buildEmailHtml(opts: EmailLayoutOptions): string {
   <title>${title}</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background-color: #f0f2f5; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #1a1a1a; }
+    body { background-color: #f0f2f5; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #1a1a1a; -webkit-font-smoothing: antialiased; }
     a { color: #c8a70e; text-decoration: none; }
     p { margin: 0 0 16px 0; }
     ul, ol { padding-left: 20px; margin: 0 0 16px 0; }
@@ -47,8 +49,13 @@ export function buildEmailHtml(opts: EmailLayoutOptions): string {
           <tr>
             <td align="center" style="background:#0d0e12; padding: 28px 40px;">
               ${logoUrl
-                ? `<img src="${logoUrl}" alt="${companyName}" style="height:48px; max-width:220px; object-fit:contain;" />`
-                : `<span style="font-size:22px; font-weight:900; color:#e4c126; letter-spacing:1px;">${companyName}</span>`
+                ? `<a href="${domainUrl || '#'}" target="_blank" style="text-decoration:none; display:inline-block;">
+                     <img src="${logoUrl}" alt="${companyName}" style="max-height:48px; max-width:220px; width:auto; height:auto; object-fit:contain; display:block; border:0;" />
+                   </a>`
+                : (domainUrl
+                    ? `<a href="${domainUrl}" target="_blank" style="text-decoration:none;"><span style="font-size:22px; font-weight:900; color:#e4c126; letter-spacing:1px;">${companyName}</span></a>`
+                    : `<span style="font-size:22px; font-weight:900; color:#e4c126; letter-spacing:1px;">${companyName}</span>`
+                  )
               }
             </td>
           </tr>
@@ -57,7 +64,7 @@ export function buildEmailHtml(opts: EmailLayoutOptions): string {
           <!-- BANNER ROW -->
           <tr>
             <td style="padding:0;">
-              <img src="${bannerUrl}" alt="Banner" style="width:100%; max-height:220px; object-fit:cover; display:block;" />
+              <img src="${bannerUrl}" alt="Banner" style="width:100%; max-height:220px; object-fit:cover; display:block; border:0;" />
             </td>
           </tr>` : ""}
 
