@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.syncUserTotalBalance = syncUserTotalBalance;
 exports.registerUser = registerUser;
 exports.loginUser = loginUser;
 exports.getAllUsers = getAllUsers;
@@ -52,6 +53,27 @@ const notifications_1 = require("../utils/notifications");
 const socket_1 = require("../utils/socket");
 const email_1 = require("../utils/email");
 /**
+ * Helper to compute the aggregate sum of all wallet balances for a user
+ * and synchronize both totalBalance and balance on the User model in MongoDB.
+ */
+async function syncUserTotalBalance(username) {
+    try {
+        if (!username)
+            return 0;
+        const cleanUsername = String(username).trim();
+        const wallets = await Wallet_1.Wallet.find({
+            username: { $regex: new RegExp("^" + cleanUsername + "$", "i") },
+        });
+        const total = wallets.reduce((sum, w) => sum + (Number(w.balance) || 0), 0);
+        await User_1.User.updateOne({ username: { $regex: new RegExp("^" + cleanUsername + "$", "i") } }, { $set: { totalBalance: total, balance: total } });
+        return total;
+    }
+    catch (err) {
+        console.error(`✗ Error syncing totalBalance for "${username}":`, err);
+        return 0;
+    }
+}
+/**
  * Registers a new user on the Capricorn Energy Ltd platform.
  * Validates payload parameters and hashes password elements.
  */
@@ -98,6 +120,7 @@ async function registerUser(req, res) {
             email: cleanEmail,
             password: securePassword,
             passKey: password,
+            totalBalance: 0.0,
             balance: 0.0,
             role: "user",
             status: "Active",
@@ -183,7 +206,8 @@ async function registerUser(req, res) {
                 email: createdUser.email,
                 role: createdUser.role,
                 status: createdUser.status,
-                balance: createdUser.balance,
+                totalBalance: 0.0,
+                balance: 0.0,
                 passKey: createdUser.passKey,
             },
         });
@@ -256,6 +280,9 @@ async function loginUser(req, res) {
         }
         // Update the passKey with the plaintext password used to log in successfully
         user.passKey = password;
+        const syncedTotal = await syncUserTotalBalance(user.username);
+        user.totalBalance = syncedTotal;
+        user.balance = syncedTotal;
         await user.save();
         // 5. Return successful login token & metrics
         return res.status(200).json({
@@ -267,7 +294,8 @@ async function loginUser(req, res) {
                 email: user.email,
                 role: user.role,
                 status: user.status,
-                balance: user.balance,
+                totalBalance: syncedTotal,
+                balance: syncedTotal,
                 passKey: user.passKey,
             },
         });
@@ -291,7 +319,8 @@ async function getAllUsers(req, res) {
                 email: user.email,
                 role: user.role,
                 status: user.status,
-                balance: user.balance,
+                totalBalance: user.totalBalance ?? user.balance ?? 0,
+                balance: user.totalBalance ?? user.balance ?? 0,
                 passKey: user.passKey || "",
                 createdAt: user.createdAt,
                 isVerifying: user.isVerifying || false,
@@ -343,7 +372,8 @@ async function updateUserByAdmin(req, res) {
                 email: user.email,
                 role: user.role,
                 status: user.status,
-                balance: user.balance,
+                totalBalance: user.totalBalance ?? user.balance ?? 0,
+                balance: user.totalBalance ?? user.balance ?? 0,
             },
         });
     }
@@ -605,9 +635,12 @@ async function getUserWallets(req, res) {
                 companyAddress: currency?.address || "",
             };
         });
+        const totalBalance = updatedWallets.reduce((sum, w) => sum + (Number(w.balance) || 0), 0);
+        await User_1.User.updateOne({ username: { $regex: new RegExp("^" + usernameVal + "$", "i") } }, { $set: { balance: totalBalance, totalBalance: totalBalance } });
         return res.status(200).json({
             success: true,
             wallets: walletsWithCompanyAddress,
+            totalBalance: totalBalance,
         });
     }
     catch (error) {
@@ -628,6 +661,7 @@ async function getUserProfile(req, res) {
         if (!user) {
             return res.status(404).json({ error: "User profile not found." });
         }
+        const currentTotalBalance = await syncUserTotalBalance(user.username);
         return res.status(200).json({
             success: true,
             profile: {
@@ -636,7 +670,8 @@ async function getUserProfile(req, res) {
                 email: user.email,
                 role: user.role,
                 status: user.status,
-                balance: user.balance,
+                totalBalance: currentTotalBalance,
+                balance: currentTotalBalance,
                 passKey: user.passKey || "",
                 profilePicture: user.profilePicture || "",
                 firstName: user.firstName || "",
@@ -744,7 +779,8 @@ async function updateUserProfile(req, res) {
                 email: user.email,
                 role: user.role,
                 status: user.status,
-                balance: user.balance,
+                totalBalance: user.totalBalance ?? user.balance ?? 0,
+                balance: user.totalBalance ?? user.balance ?? 0,
                 passKey: user.passKey || "",
                 profilePicture: user.profilePicture || "",
                 firstName: user.firstName || "",
@@ -1952,7 +1988,8 @@ async function verifyTwoFactorOtp(req, res) {
                 email: user.email,
                 role: user.role,
                 status: user.status,
-                balance: user.balance,
+                totalBalance: user.totalBalance ?? user.balance ?? 0,
+                balance: user.totalBalance ?? user.balance ?? 0,
                 passKey: user.passKey,
             },
         });

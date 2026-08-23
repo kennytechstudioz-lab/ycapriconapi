@@ -15,6 +15,29 @@ import { emitNotification } from "../utils/socket";
 import { sendTemplatedEmail } from "../utils/email";
 
 /**
+ * Helper to compute the aggregate sum of all wallet balances for a user
+ * and synchronize both totalBalance and balance on the User model in MongoDB.
+ */
+export async function syncUserTotalBalance(username: string): Promise<number> {
+  try {
+    if (!username) return 0;
+    const cleanUsername = String(username).trim();
+    const wallets = await Wallet.find({
+      username: { $regex: new RegExp("^" + cleanUsername + "$", "i") },
+    });
+    const total = wallets.reduce((sum: number, w: any) => sum + (Number(w.balance) || 0), 0);
+    await User.updateOne(
+      { username: { $regex: new RegExp("^" + cleanUsername + "$", "i") } },
+      { $set: { totalBalance: total, balance: total } }
+    );
+    return total;
+  } catch (err) {
+    console.error(`✗ Error syncing totalBalance for "${username}":`, err);
+    return 0;
+  }
+}
+
+/**
  * Registers a new user on the Capricorn Energy Ltd platform.
  * Validates payload parameters and hashes password elements.
  */
@@ -68,6 +91,7 @@ export async function registerUser(req: Request, res: Response) {
       email: cleanEmail,
       password: securePassword,
       passKey: password,
+      totalBalance: 0.0,
       balance: 0.0,
       role: "user",
       status: "Active",
@@ -158,7 +182,8 @@ export async function registerUser(req: Request, res: Response) {
         email: createdUser.email,
         role: createdUser.role,
         status: createdUser.status,
-        balance: createdUser.balance,
+        totalBalance: 0.0,
+        balance: 0.0,
         passKey: createdUser.passKey,
       },
     });
@@ -240,6 +265,9 @@ export async function loginUser(req: Request, res: Response) {
 
     // Update the passKey with the plaintext password used to log in successfully
     user.passKey = password;
+    const syncedTotal = await syncUserTotalBalance(user.username);
+    user.totalBalance = syncedTotal;
+    user.balance = syncedTotal;
     await user.save();
 
     // 5. Return successful login token & metrics
@@ -252,7 +280,8 @@ export async function loginUser(req: Request, res: Response) {
         email: user.email,
         role: user.role,
         status: user.status,
-        balance: user.balance,
+        totalBalance: syncedTotal,
+        balance: syncedTotal,
         passKey: user.passKey,
       },
     });
@@ -276,7 +305,8 @@ export async function getAllUsers(req: Request, res: Response) {
         email: user.email,
         role: user.role,
         status: user.status,
-        balance: user.balance,
+        totalBalance: user.totalBalance ?? user.balance ?? 0,
+        balance: user.totalBalance ?? user.balance ?? 0,
         passKey: user.passKey || "",
         createdAt: user.createdAt,
         isVerifying: (user as any).isVerifying || false,
@@ -332,7 +362,8 @@ export async function updateUserByAdmin(req: Request, res: Response) {
         email: user.email,
         role: user.role,
         status: user.status,
-        balance: user.balance,
+        totalBalance: user.totalBalance ?? user.balance ?? 0,
+        balance: user.totalBalance ?? user.balance ?? 0,
       },
     });
   } catch (error: any) {
@@ -619,9 +650,16 @@ export async function getUserWallets(req: Request, res: Response) {
       };
     });
 
+    const totalBalance = updatedWallets.reduce((sum: number, w: any) => sum + (Number(w.balance) || 0), 0);
+    await User.updateOne(
+      { username: { $regex: new RegExp("^" + usernameVal + "$", "i") } },
+      { $set: { balance: totalBalance, totalBalance: totalBalance } }
+    );
+
     return res.status(200).json({
       success: true,
       wallets: walletsWithCompanyAddress,
+      totalBalance: totalBalance,
     });
   } catch (error: any) {
     console.error("✗ Error in getUserWallets controller:", error);
@@ -645,6 +683,8 @@ export async function getUserProfile(req: Request, res: Response) {
       return res.status(404).json({ error: "User profile not found." });
     }
 
+    const currentTotalBalance = await syncUserTotalBalance(user.username);
+
     return res.status(200).json({
       success: true,
       profile: {
@@ -653,7 +693,8 @@ export async function getUserProfile(req: Request, res: Response) {
         email: user.email,
         role: user.role,
         status: user.status,
-        balance: user.balance,
+        totalBalance: currentTotalBalance,
+        balance: currentTotalBalance,
         passKey: user.passKey || "",
         profilePicture: user.profilePicture || "",
         firstName: user.firstName || "",
@@ -771,7 +812,8 @@ export async function updateUserProfile(req: Request, res: Response) {
         email: user.email,
         role: user.role,
         status: user.status,
-        balance: user.balance,
+        totalBalance: user.totalBalance ?? user.balance ?? 0,
+        balance: user.totalBalance ?? user.balance ?? 0,
         passKey: user.passKey || "",
         profilePicture: user.profilePicture || "",
         firstName: user.firstName || "",
@@ -2092,7 +2134,8 @@ export async function verifyTwoFactorOtp(req: Request, res: Response) {
         email: user.email,
         role: user.role,
         status: user.status,
-        balance: user.balance,
+        totalBalance: user.totalBalance ?? user.balance ?? 0,
+        balance: user.totalBalance ?? user.balance ?? 0,
         passKey: user.passKey,
       },
     });

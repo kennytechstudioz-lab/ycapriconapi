@@ -62,14 +62,16 @@ WalletSchema.post("save", async function (doc: any) {
     const WalletModel = doc.constructor;
     const UserModel = WalletModel.db.model("User");
 
-    const wallets = await WalletModel.find({ username });
-    const total = wallets.reduce((sum: number, w: any) => sum + (w.balance || 0), 0);
+    const wallets = await WalletModel.find({
+      username: { $regex: new RegExp("^" + String(username).trim() + "$", "i") },
+    });
+    const total = wallets.reduce((sum: number, w: any) => sum + (Number(w.balance) || 0), 0);
 
     await UserModel.updateOne(
-      { username },
-      { balance: total, totalBalance: total }
+      { username: { $regex: new RegExp("^" + String(username).trim() + "$", "i") } },
+      { $set: { balance: total, totalBalance: total } }
     );
-    console.log(`[Mongoose Hook] Synced balance for "${username}": $${total}`);
+    console.log(`[Mongoose Hook] Synced totalBalance for "${username}": $${total}`);
   } catch (err) {
     console.error("✗ Error in Wallet post-save balance sync hook:", err);
   }
