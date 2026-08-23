@@ -1,3 +1,5 @@
+import fs from "fs";
+import path from "path";
 import nodemailer from "nodemailer";
 import { EmailTemplate } from "../models/EmailTemplate";
 import { User } from "../models/User";
@@ -25,6 +27,30 @@ export interface CompanyInfo {
   domainName: string;
   companyEmail: string;
   logoUrl: string;
+}
+
+/**
+ * Finds the local path to the company logo asset on the filesystem if available.
+ */
+function getLocalLogoPath(): string | null {
+  const candidates = [
+    path.resolve(__dirname, "../assets/CapricornLogo.png"),
+    path.resolve(__dirname, "../../src/assets/CapricornLogo.png"),
+    path.resolve(__dirname, "../../assets/CapricornLogo.png"),
+    path.resolve(process.cwd(), "dist/assets/CapricornLogo.png"),
+    path.resolve(process.cwd(), "src/assets/CapricornLogo.png"),
+    path.resolve(process.cwd(), "assets/CapricornLogo.png"),
+    path.resolve(process.cwd(), "../web/public/CapricornLogo.png"),
+  ];
+
+  for (const candidate of candidates) {
+    try {
+      if (fs.existsSync(candidate)) {
+        return candidate;
+      }
+    } catch (_) {}
+  }
+  return null;
 }
 
 /**
@@ -117,6 +143,13 @@ export async function sendDirectEmail(params: {
   const compiledGreeting = compileTemplate(greeting, vars);
   const compiledContent = compileTemplate(content, vars);
 
+  // Check if local logo file is available for inline CID attachment
+  const localLogo = getLocalLogoPath();
+  const emailLogoUrl = localLogo ? "cid:companylogo" : companyInfo.logoUrl;
+  const attachments = localLogo
+    ? [{ filename: "CapricornLogo.png", path: localLogo, cid: "companylogo" }]
+    : [];
+
   const html = buildEmailHtml({
     title: compiledSubject,
     greeting: compiledGreeting,
@@ -124,7 +157,7 @@ export async function sendDirectEmail(params: {
     companyName: companyInfo.companyName,
     companyEmail: companyInfo.companyEmail,
     domainUrl: companyInfo.domainName,
-    logoUrl: companyInfo.logoUrl,
+    logoUrl: emailLogoUrl,
   });
 
   try {
@@ -134,6 +167,7 @@ export async function sendDirectEmail(params: {
       to,
       subject: compiledSubject,
       html,
+      attachments,
     });
     console.log(`[Email] ✓ Direct email sent to ${to} — subject: "${compiledSubject}"`);
   } catch (err: any) {
@@ -182,6 +216,13 @@ export async function sendTemplatedEmail(params: {
       bannerUrl = template.banner || undefined;
     }
 
+    // Check if local logo file is available for inline CID attachment
+    const localLogo = getLocalLogoPath();
+    const emailLogoUrl = localLogo ? "cid:companylogo" : companyInfo.logoUrl;
+    const attachments = localLogo
+      ? [{ filename: "CapricornLogo.png", path: localLogo, cid: "companylogo" }]
+      : [];
+
     const html = buildEmailHtml({
       title: subject,
       greeting,
@@ -190,7 +231,7 @@ export async function sendTemplatedEmail(params: {
       companyName: companyInfo.companyName,
       companyEmail: companyInfo.companyEmail,
       domainUrl: companyInfo.domainName,
-      logoUrl: companyInfo.logoUrl,
+      logoUrl: emailLogoUrl,
     });
     const fromName = process.env.EMAIL_FROM_NAME || companyInfo.companyName;
     const fromAddress = process.env.EMAIL_FROM_ADDRESS || companyInfo.companyEmail || "";
@@ -201,6 +242,7 @@ export async function sendTemplatedEmail(params: {
       to: user.email,
       subject,
       html,
+      attachments,
     });
 
     console.log(`[Email] ✓ "${templateName}" sent to ${user.email}`);

@@ -27,10 +27,10 @@ function buildEmailHtml(opts) {
 
           <!-- LOGO ROW -->
           <tr>
-            <td align="center" style="background:#0d0e12; padding: 28px 40px;">
+            <td align="center" style="background:#0d0e12; padding: 26px 40px; text-align:center;">
               ${logoUrl
         ? `<a href="${domainUrl || '#'}" target="_blank" style="text-decoration:none; display:inline-block;">
-                     <img src="${logoUrl}" alt="${companyName}" style="max-height:48px; max-width:220px; width:auto; height:auto; object-fit:contain; display:block; border:0;" />
+                     <img src="${logoUrl}" alt="${companyName}" width="180" style="display:block; margin:0 auto; width:180px; max-width:180px; height:auto; border:0; outline:none; text-decoration:none; -ms-interpolation-mode:bicubic;" />
                    </a>`
         : (domainUrl
             ? `<a href="${domainUrl}" target="_blank" style="text-decoration:none;"><span style="font-size:22px; font-weight:900; color:#e4c126; letter-spacing:1px;">${companyName}</span></a>`
