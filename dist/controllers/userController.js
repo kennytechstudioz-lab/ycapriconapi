@@ -1393,8 +1393,18 @@ async function getActiveDeposits(req, res) {
         if (!username) {
             return res.status(400).json({ success: false, error: "Username parameter is required." });
         }
-        const activeDeposits = await ActiveDeposit_1.ActiveDeposit.find({ username: String(username) }).sort({ createdAt: -1 });
-        return res.status(200).json({ success: true, activeDeposits });
+        const cleanUsername = String(username).trim();
+        const activeDeposits = await ActiveDeposit_1.ActiveDeposit.find({
+            username: { $regex: new RegExp("^" + cleanUsername + "$", "i") },
+        }).sort({ createdAt: -1 });
+        const totalActiveDepositAmount = activeDeposits
+            .filter((d) => d.daysRemaining === undefined || d.daysRemaining > 0)
+            .reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
+        return res.status(200).json({
+            success: true,
+            activeDeposits,
+            totalActiveDepositAmount,
+        });
     }
     catch (error) {
         console.error("✗ Error in getActiveDeposits controller:", error);
