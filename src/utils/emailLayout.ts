@@ -54,12 +54,13 @@ export function buildEmailHtml(opts: EmailLayoutOptions): string {
             </td>
           </tr>
 
+          ${bannerUrl ? `
           <!-- BANNER ROW -->
           <tr>
             <td style="padding:0;">
-              <img src="https://capricornenergyholdings.com/CapricornLogo.png" alt="Banner" style="width:100%; max-height:220px; object-fit:cover; display:block; border:0;" />
+              <img src="${bannerUrl}" alt="Banner" style="width:100%; max-height:220px; object-fit:cover; display:block; border:0;" />
             </td>
-          </tr>
+          </tr>` : ""}
 
           <!-- TITLE ROW -->
           <tr>
